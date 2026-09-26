@@ -1,0 +1,10 @@
+name: gbwoodprint
+
+services:
+  frontend:
+    build: ./frontend
+    image: gbwoodprint-frontend:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-gbwoodprint}-frontend
+    ports:
+      - "${FRONTEND_PORT:-21806}:80"
+    restart: unless-stopped
