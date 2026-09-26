@@ -898,6 +898,26 @@ textarea:focus {
   color: var(--ink-soft);
 }
 
+.summary-strip small {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+}
+
+.pending-batch {
+  border-style: dashed;
+  border-color: var(--gold);
+}
+
+.recheck-tag {
+  margin-top: 0.5rem;
+  color: #79540e;
+  background: #f3dfad;
+}
+
+.recheck-note {
+  color: var(--cinnabar-dark) !important;
+}
+
 .carver-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 23rem;

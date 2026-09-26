@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
-  import { get } from 'svelte/store'
   import { link, params } from 'svelte-spa-router'
   import ColorSwatch from '../components/common/ColorSwatch.svelte'
   import EmptyBox from '../components/common/EmptyBox.svelte'
@@ -76,9 +75,7 @@
   async function markCarved(block: Block): Promise<void> {
     await blockStore.update(block.id, { state: '已刻成' })
     await carverStore.releaseBlock(block.id)
-    const currentBlocks = get(blockStore).filter((item) => item.draftId === draftId)
-    const allCarved = currentBlocks.every((item) => item.state === '已刻成' || item.state === '已修版')
-    await draftStore.update(draftId, { status: allCarved ? '可印' : '刻版中' })
+    await blockStore.syncDraftStatus(draftId)
 
     const existing = await db.nodes.where('blockId').equals(block.id).toArray()
     await db.nodes.add({
@@ -136,7 +133,11 @@
     if (!block) return
     if (stage === '刻版' || stage === '修版') {
       await blockStore.update(block.id, { state: stage === '修版' ? '已修版' : '在刻' })
-      lastSync = `已将首块版片阶段调至${stage}`
+      await blockStore.syncDraftStatus(draftId)
+      lastSync =
+        stage === '刻版'
+          ? `${block.blockName}已退回重刻，画稿状态退回刻版中，名下批次待重检`
+          : `${block.blockName}已进入修版，画稿状态已按版片进度重算`
     }
   }
 

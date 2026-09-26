@@ -25,6 +25,30 @@
   const selectedBlocks = $derived(
     draftId ? [...$blockStore].filter((block) => block.draftId === draftId).sort((a, b) => a.colorNo - b.colorNo) : [],
   )
+  const uncarvedByDraft = blockStore.uncarvedByDraft
+  const printReadyByDraft = blockStore.printReadyByDraft
+
+  // 版片没全部刻成或修好的画稿不准登记批次，并列出还差哪几块
+  const selectedUncarved = $derived(draftId ? ($uncarvedByDraft[draftId] ?? []) : [])
+  const selectedReady = $derived(
+    draftId ? selectedBlocks.length > 0 && selectedUncarved.length === 0 : false,
+  )
+
+  // 有版片退回在刻的画稿，名下批次待重检，暂不计入累计印数；重新刻成后自动恢复
+  function isBatchPending(batch: PrintBatch): boolean {
+    return !($printReadyByDraft[batch.draftId] ?? false)
+  }
+
+  const countedTotalQty = $derived(
+    batches.reduce((sum, batch) => sum + (isBatchPending(batch) ? 0 : batch.qty), 0),
+  )
+  const pendingBatchCount = $derived(batches.filter(isBatchPending).length)
+
+  function uncarvedSummary(targetId: string): string {
+    const missing = [...($uncarvedByDraft[targetId] ?? [])].sort((a, b) => a.colorNo - b.colorNo)
+    if (missing.length === 0) return ''
+    return missing.map((block) => `${block.colorNo}号${block.blockName}（${block.state}）`).join('、')
+  }
 
   onMount(() => {
     void Promise.all([draftStore.load(), blockStore.load(), refreshBatches()])
@@ -59,6 +83,16 @@
   async function submitBatch(): Promise<void> {
     if (!draftId || !batchNo.trim() || !paperBatch.trim() || qty <= 0 || pieceCount <= 0) {
       formMessage = '请选择画稿，并补全批次号、纸张批号和印数。'
+      return
+    }
+
+    if (selectedBlocks.length === 0) {
+      formMessage = '该画稿尚未分版，版片刻成或修好后才能登记批次。'
+      return
+    }
+
+    if (selectedUncarved.length > 0) {
+      formMessage = `版片未齐，暂不能登记批次，还差：${uncarvedSummary(draftId)}。待全部刻成或修好后再来登记。`
       return
     }
 
@@ -122,7 +156,11 @@
 
 <section class="summary-strip four">
   <div><span>登记批次</span><strong data-testid="count-batch">{batches.length}</strong></div>
-  <div><span>累计印数</span><strong>{batches.reduce((sum, batch) => sum + batch.qty, 0)}</strong></div>
+  <div>
+    <span>累计印数</span>
+    <strong data-testid="count-total-qty">{countedTotalQty}</strong>
+    {#if pendingBatchCount > 0}<small>{pendingBatchCount} 批待重检，暂不计入</small>{/if}
+  </div>
   <div><span>覆盖画稿</span><strong>{new Set(batches.map((batch) => batch.draftId)).size}</strong></div>
   <div><span>在册画稿</span><strong>{$draftStore.length}</strong></div>
 </section>
@@ -170,6 +208,16 @@
         <textarea data-testid="field-inkNote" rows="2" bind:value={inkNote} placeholder="分色记录颜料、胶量与稀稠"></textarea>
       </label>
     </div>
+
+    {#if selectedDraft && !selectedReady}
+      <p class="notice" data-testid="notice-uncarved">
+        {#if selectedBlocks.length === 0}
+          该画稿尚未分版，版片刻成或修好后才能登记批次。
+        {:else}
+          版片未齐，暂不能登记批次，还差：{uncarvedSummary(draftId)}。待全部刻成或修好后再来登记。
+        {/if}
+      </p>
+    {/if}
 
     {#if selectedDraft}
       <div class="deviation-block">
@@ -219,19 +267,26 @@
 {:else}
   <section class="batch-list">
     {#each batches as batch (batch.id)}
-      <article class="panel batch-item" data-testid="row-batch">
+      {@const pending = isBatchPending(batch)}
+      <article class="panel batch-item" class:pending-batch={pending} data-testid="row-batch">
         <div class="batch-number">
           <span>{batch.printedAt.replace(/-/g, '.')}</span>
           <h2>{batch.batchNo}</h2>
           <p>{draftTitle(batch.draftId)} · {batch.paperBatch}</p>
+          {#if pending}
+            <span class="tag recheck-tag" data-testid="tag-recheck">待重检</span>
+          {/if}
         </div>
         <div class="batch-counts">
-          <div><span>总印数</span><strong>{batch.qty}</strong></div>
+          <div><span>总印数{pending ? '（不计）' : ''}</span><strong>{batch.qty}</strong></div>
           <div><span>每版印次</span><strong>{batch.pieceCount}</strong></div>
         </div>
         <div class="batch-notes">
           <p><b>颜料胶量：</b>{batch.inkNote}</p>
           <p><b>套色检查：</b>{batch.qcNote}</p>
+          {#if pending}
+            <p class="recheck-note" data-testid="recheck-note"><b>重检说明：</b>该画稿有版片退回在刻，本批待重检、暂不计入累计印数，待版片重新刻成后自动恢复。</p>
+          {/if}
         </div>
       </article>
     {/each}
