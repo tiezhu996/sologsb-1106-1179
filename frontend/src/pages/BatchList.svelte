@@ -21,10 +21,41 @@
   let deviations = $state<Record<string, string>>({})
   let formMessage = $state('')
 
+  const blockStats = blockStore.statsByDraft
+  const incompleteByDraft = blockStore.incompleteByDraft
+
   const selectedDraft = $derived($draftStore.find((draft) => draft.id === draftId) ?? null)
   const selectedBlocks = $derived(
     draftId ? [...$blockStore].filter((block) => block.draftId === draftId).sort((a, b) => a.colorNo - b.colorNo) : [],
   )
+  const selectedReady = $derived(draftId ? draftPrintReady(draftId) : false)
+  const countedBatches = $derived(batches.filter((batch) => draftPrintReady(batch.draftId)))
+  const countedQty = $derived(countedBatches.reduce((sum, batch) => sum + batch.qty, 0))
+  const recheckCount = $derived(batches.length - countedBatches.length)
+
+  function draftPrintReady(targetId: string): boolean {
+    const stats = $blockStats[targetId]
+    if (!stats || stats.total === 0) return false
+    return ($incompleteByDraft[targetId] ?? []).length === 0
+  }
+
+  function missingSummary(targetId: string): string {
+    const missing = $incompleteByDraft[targetId] ?? []
+    return missing.map((block) => `${block.blockName}（${block.state}）`).join('、')
+  }
+
+  function gateMessage(targetId: string): string {
+    const title = $draftStore.find((draft) => draft.id === targetId)?.title ?? '该画稿'
+    const stats = $blockStats[targetId]
+    if (!stats || stats.total === 0) return `「${title}」尚未分版，暂不能登记批次。`
+    return `「${title}」版片未全部刻成或修好，暂不能登记批次。尚缺：${missingSummary(targetId)}。`
+  }
+
+  function recheckNote(targetId: string): string {
+    const stats = $blockStats[targetId]
+    if (!stats || stats.total === 0) return '该画稿尚未分版，本批暂不计入累计印数。'
+    return `尚缺 ${missingSummary(targetId)}，本批暂不计入累计印数，版片全部刻成后自动恢复。`
+  }
 
   onMount(() => {
     void Promise.all([draftStore.load(), blockStore.load(), refreshBatches()])
@@ -59,6 +90,11 @@
   async function submitBatch(): Promise<void> {
     if (!draftId || !batchNo.trim() || !paperBatch.trim() || qty <= 0 || pieceCount <= 0) {
       formMessage = '请选择画稿，并补全批次号、纸张批号和印数。'
+      return
+    }
+
+    if (!draftPrintReady(draftId)) {
+      formMessage = gateMessage(draftId)
       return
     }
 
@@ -120,9 +156,10 @@
   </div>
 </div>
 
-<section class="summary-strip four">
+<section class="summary-strip five">
   <div><span>登记批次</span><strong data-testid="count-batch">{batches.length}</strong></div>
-  <div><span>累计印数</span><strong>{batches.reduce((sum, batch) => sum + batch.qty, 0)}</strong></div>
+  <div><span>累计印数</span><strong data-testid="count-qty">{countedQty}</strong></div>
+  <div><span>待重检批次</span><strong data-testid="count-recheck">{recheckCount}</strong></div>
   <div><span>覆盖画稿</span><strong>{new Set(batches.map((batch) => batch.draftId)).size}</strong></div>
   <div><span>在册画稿</span><strong>{$draftStore.length}</strong></div>
 </section>
@@ -142,7 +179,9 @@
         <span>所属画稿</span>
         <select data-testid="field-draftId" value={draftId} onchange={(event) => selectDraft((event.currentTarget as HTMLSelectElement).value)}>
           <option value="">请选择</option>
-          {#each $draftStore as draft}<option value={draft.id}>{draft.title} · {draft.genre}</option>{/each}
+          {#each $draftStore as draft}
+            <option value={draft.id}>{draft.title} · {draft.genre}{draftPrintReady(draft.id) ? '' : '（版片未齐）'}</option>
+          {/each}
         </select>
       </label>
       <label>
@@ -170,6 +209,10 @@
         <textarea data-testid="field-inkNote" rows="2" bind:value={inkNote} placeholder="分色记录颜料、胶量与稀稠"></textarea>
       </label>
     </div>
+
+    {#if selectedDraft && !selectedReady}
+      <p class="form-message" data-testid="gate-message">{gateMessage(draftId)}</p>
+    {/if}
 
     {#if selectedDraft}
       <div class="deviation-block">
@@ -203,7 +246,7 @@
 
     {#if formMessage}<p class="form-message">{formMessage}</p>{/if}
     <div class="form-actions">
-      <button class="button primary" data-testid="submit-batch" type="button" onclick={submitBatch}>保存批次</button>
+      <button class="button primary" data-testid="submit-batch" type="button" disabled={!!selectedDraft && !selectedReady} onclick={submitBatch}>保存批次</button>
       <button class="button ghost" type="button" onclick={() => (showForm = false)}>取消</button>
     </div>
   </section>
@@ -219,17 +262,20 @@
 {:else}
   <section class="batch-list">
     {#each batches as batch (batch.id)}
-      <article class="panel batch-item" data-testid="row-batch">
+      {@const recheck = !draftPrintReady(batch.draftId)}
+      <article class="panel batch-item" class:pending-recheck={recheck} data-testid="row-batch">
         <div class="batch-number">
           <span>{batch.printedAt.replace(/-/g, '.')}</span>
           <h2>{batch.batchNo}</h2>
           <p>{draftTitle(batch.draftId)} · {batch.paperBatch}</p>
+          {#if recheck}<span class="tag recheck-tag" data-testid="tag-recheck">待重检</span>{/if}
         </div>
         <div class="batch-counts">
           <div><span>总印数</span><strong>{batch.qty}</strong></div>
           <div><span>每版印次</span><strong>{batch.pieceCount}</strong></div>
         </div>
         <div class="batch-notes">
+          {#if recheck}<p class="recheck-note"><b>待重检：</b>{recheckNote(batch.draftId)}</p>{/if}
           <p><b>颜料胶量：</b>{batch.inkNote}</p>
           <p><b>套色检查：</b>{batch.qcNote}</p>
         </div>

@@ -97,6 +97,7 @@
       }
     })
     await blockStore.load()
+    await blockStore.syncDraftStatus(id)
 
     title = ''
     genre = '门神'
@@ -117,8 +118,10 @@
   }
 
   function draftCardData(draft: Draft) {
+    const stats = $blockStats[draft.id] ?? { total: 0, carved: 0, rate: 0 }
     return {
-      stats: $blockStats[draft.id] ?? { total: 0, carved: 0, rate: 0 },
+      stats,
+      ready: stats.total > 0 && stats.carved === stats.total,
       batch: latestBatchByDraft[draft.id],
     }
   }
@@ -252,6 +255,7 @@
           {#if data.batch}
             <strong>{data.batch.batchNo}</strong>
             <small>{data.batch.printedAt.replace(/-/g, '.')} · 印 {data.batch.qty} 张</small>
+            {#if !data.ready}<em class="recheck-line">待重检 · 暂不计入累计印数</em>{/if}
           {:else}
             <strong>尚未试印</strong>
             <small>版片齐备后可登记首批</small>

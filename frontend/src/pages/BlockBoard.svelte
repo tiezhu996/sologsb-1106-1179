@@ -131,12 +131,17 @@
     lastSync = `${block.blockName}崩口记录已更新`
   }
 
-  async function returnToStage(_index: number, stage: ProcessStage): Promise<void> {
-    const block = $orderedBlocks[0]
-    if (!block) return
-    if (stage === '刻版' || stage === '修版') {
-      await blockStore.update(block.id, { state: stage === '修版' ? '已修版' : '在刻' })
-      lastSync = `已将首块版片阶段调至${stage}`
+  function returnToStage(block: Block) {
+    return async (_index: number, stage: ProcessStage): Promise<void> => {
+      if (stage !== '刻版' && stage !== '修版') return
+      const nextState: Block['state'] = stage === '修版' ? '已修版' : '在刻'
+      if (block.state === nextState) return
+      await blockStore.update(block.id, { state: nextState })
+      await blockStore.syncDraftStatus(draftId)
+      lastSync =
+        nextState === '在刻'
+          ? `${block.blockName}已退回重刻，画稿回到刻版中，名下批次待重检`
+          : `${block.blockName}已修版，画稿状态已同步`
     }
   }
 
@@ -258,7 +263,7 @@
                       activeIndex={blockStateStage(block.state)}
                       completedCount={block.state === '已刻成' || block.state === '已修版' ? 5 : block.state === '在刻' ? 3 : 1}
                       compact={true}
-                      onselect={block.id === $orderedBlocks[0]?.id ? returnToStage : undefined}
+                      onselect={returnToStage(block)}
                     />
                   </td>
                 </tr>

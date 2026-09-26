@@ -289,6 +289,10 @@ footer {
   box-shadow: var(--shadow);
 }
 
+.summary-strip.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .summary-strip > div {
   min-height: 6.2rem;
   display: flex;
@@ -522,6 +526,12 @@ textarea:focus {
   background: #f3dfad;
 }
 
+.tag.recheck-tag {
+  margin-top: 0.4rem;
+  color: #79540e;
+  background: #f3dfad;
+}
+
 .title-line {
   display: flex;
   align-items: center;
@@ -616,6 +626,14 @@ textarea:focus {
 
 .latest-batch small {
   color: var(--ink-muted);
+}
+
+.latest-batch .recheck-line {
+  grid-column: 1 / -1;
+  color: #79540e;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .draft-card .button {
@@ -898,6 +916,18 @@ textarea:focus {
   color: var(--ink-soft);
 }
 
+.batch-item.pending-recheck .batch-counts strong {
+  color: var(--ink-muted);
+}
+
+.batch-notes .recheck-note {
+  color: #79540e;
+}
+
+.batch-notes .recheck-note b {
+  color: inherit;
+}
+
 .carver-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 23rem;
@@ -1102,6 +1132,7 @@ textarea:focus {
   }
 
   .summary-strip,
+  .summary-strip.five,
   .form-grid,
   .form-grid.three,
   .deviation-grid {
@@ -1145,6 +1176,7 @@ textarea:focus {
   }
 
   .summary-strip,
+  .summary-strip.five,
   .form-grid,
   .form-grid.three,
   .deviation-grid {

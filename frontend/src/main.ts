@@ -29,6 +29,7 @@ async function boot(): Promise<void> {
   bridgeDeepLink()
   try {
     await initializeDatabase()
+    await blockStore.reconcileDraftStatuses()
     await Promise.all([draftStore.load(), blockStore.load(), carverStore.load()])
   } catch {
     // 页面仍会挂载，并由各页空态提示本地数据不可用。
